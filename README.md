@@ -1,5 +1,5 @@
 # SBDG - Monitoramento Global de Terremotos  
-Para executar este projeto tendo apenas o VS Code instalado, instale o Python, o PostgreSQL e a extensão PostGIS. Acesse o PostgreSQL, crie um banco de dados chamado sbdg_terremotos e execute o comando SQL abaixo:  
+Para executar este projeto, instale o Python, o PostgreSQL e a extensão PostGIS. Acesse o PostgreSQL, crie um banco de dados chamado sbdg_terremotos e execute o comando SQL abaixo:  
 
 
 CREATE EXTENSION IF NOT EXISTS postgis;  
