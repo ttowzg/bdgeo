@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SBDG - Monitoramento de Terremotos</title>
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #111;
+        color: white;
+        font-family: sans-serif;
+      }
+      #mapa {
+        height: 100vh;
+        width: 100vw;
+      }
+      .painel {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 15px 20px;
+        border-radius: 8px;
+        border: 1px solid #444;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      }
+      .painel h2 {
+        margin: 0 0 10px 0;
+        font-size: 16px;
+        color: #ff5722;
+      }
+      .legenda {
+        font-size: 13px;
+        line-height: 1.8;
+      }
+      .linha-placa {
+        display: inline-block;
+        width: 20px;
+        height: 3px;
+        background-color: #ff9800;
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+      .cor-calor {
+        display: inline-block;
+        width: 20px;
+        height: 12px;
+        background: linear-gradient(to right, blue, lime, red);
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+
+      /* Estilização da nova legenda agrupada */
+      .cluster-popup {
+        color: #333;
+        font-size: 13px;
+        max-height: 250px;
+        overflow-y: auto;
+        padding-right: 5px;
+      }
+      .cluster-popup h3 {
+        margin: 0 0 8px 0;
+        color: #d32f2f;
+        font-size: 15px;
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 5px;
+      }
+      .eq-item {
+        margin-bottom: 10px;
+        background: #f9f9f9;
+        padding: 6px;
+        border-radius: 4px;
+        border-left: 4px solid #ff9800;
+      }
+      .eq-item b {
+        color: #000;
+      }
+      .eq-meta {
+        font-size: 11px;
+        color: #666;
+        display: block;
+        margin-top: 3px;
+      }
+
+      /* Customiza a barra de rolagem do popup */
+      .cluster-popup::-webkit-scrollbar {
+        width: 6px;
+      }
+      .cluster-popup::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      .cluster-popup::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="painel">
+      <h2>Monitoramento Sísmico Global</h2>
+      <div class="legenda">
+        <div>
+          <span class="linha-placa"></span> Limites das Placas Tectônicas
+        </div>
+        <div>
+          <span class="cor-calor"></span> Densidade de Terremotos (Calor)
+        </div>
+      </div>
+    </div>
+
+    <div id="mapa"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+    <script>
+      var limitesMundo = [
+        [-90, -180],
+        [90, 180],
+      ];
+      var map = L.map("mapa", {
+        maxBounds: limitesMundo,
+        maxBoundsViscosity: 1.0,
+        minZoom: 2,
+      }).setView([15, 0], 2);
+
+      L.tileLayer(
+        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        {
+          attribution: "© OpenStreetMap, © CartoDB",
+          maxZoom: 19,
+          noWrap: true,
+        },
+      ).addTo(map);
+
+      fetch(
+        "https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json",
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          L.geoJSON(data, {
+            style: {
+              color: "#ff9800",
+              weight: 1.5,
+              opacity: 0.7,
+              dashArray: "4 4",
+            },
+          }).addTo(map);
+        });
+
+      // Variável global para guardar os terremotos e permitir a busca no clique
+      var todosTerremotos = [];
+
+      fetch("http://127.0.0.1:5000/api/terremotos")
+        .then((response) => response.json())
+        .then((data) => {
+          todosTerremotos = data.features; // Salva os dados
+          var heatPoints = [];
+
+          data.features.forEach(function (feature) {
+            var lat = feature.geometry.coordinates[1];
+            var lon = feature.geometry.coordinates[0];
+            var mag = feature.properties.magnitude;
+            if (mag > 0) heatPoints.push([lat, lon, mag]);
+          });
+
+          var heat = L.heatLayer(heatPoints, {
+            radius: 18,
+            blur: 15,
+            minOpacity: 0.8,
+            maxZoom: 6,
+            max: 5.0,
+            gradient: {
+              0.2: "blue",
+              0.4: "cyan",
+              0.6: "lime",
+              0.8: "yellow",
+              1.0: "red",
+            },
+          }).addTo(map);
+
+          map.on("zoomend", function () {
+            var zoomAtual = map.getZoom();
+            var novoRaio = Math.max(15, zoomAtual * 6);
+            heat.setOptions({ radius: novoRaio });
+          });
+        })
+        .catch((error) => console.error("Erro ao carregar dados:", error));
+
+      // LÓGICA DO CLIQUE NO CLUSTER
+      map.on("click", function (e) {
+        if (todosTerremotos.length === 0) return;
+
+        // Calcula um raio de busca em metros correspondente a 20 pixels na tela (tamanho do calor)
+        var centroPixels = map.latLngToContainerPoint(e.latlng);
+        var bordaPixels = L.point(centroPixels.x + 20, centroPixels.y);
+        var bordaLatLng = map.containerPointToLatLng(bordaPixels);
+        var raioBuscaMetros = map.distance(e.latlng, bordaLatLng);
+
+        var encontrados = [];
+
+        // Varre todos os terremotos e vê quais caem dentro da área clicada
+        todosTerremotos.forEach(function (feature) {
+          var eqLat = feature.geometry.coordinates[1];
+          var eqLng = feature.geometry.coordinates[0];
+          var distancia = map.distance(e.latlng, L.latLng(eqLat, eqLng));
+
+          if (distancia <= raioBuscaMetros) {
+            encontrados.push(feature);
+          }
+        });
+
+        if (encontrados.length > 0) {
+          // Ordena do mais forte para o mais fraco
+          encontrados.sort(
+            (a, b) => b.properties.magnitude - a.properties.magnitude,
+          );
+
+          // Monta o visual da legenda com scroll
+          var conteudoPopup = `<div class="cluster-popup">
+                    <h3>Região de Calor: ${encontrados.length} tremor(es)</h3>`;
+
+          encontrados.forEach(function (f) {
+            var props = f.properties;
+            conteudoPopup += `
+                        <div class="eq-item">
+                            <b>Mag: ${props.magnitude}</b> - ${props.local}
+                            <span class="eq-meta">Prof: ${props.profundidade} km | ${props.data_hora}</span>
+                        </div>`;
+          });
+
+          conteudoPopup += `</div>`;
+
+          L.popup().setLatLng(e.latlng).setContent(conteudoPopup).openOn(map);
+        }
+      });
+    </script>
+  </body>
+</html>
