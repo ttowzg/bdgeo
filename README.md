@@ -8,7 +8,7 @@ CREATE TABLE terremotos (id VARCHAR(50) PRIMARY KEY, magnitude NUMERIC, local VA
 CREATE INDEX idx_terremotos_geom ON terremotos USING GIST (geom);  
 ```
 
-No VS Code, abra coletor.py e app.py, altere DB_PASS para a senha do seu banco e instale as dependências no terminal:  
+Na IDE, abra coletor.py e app.py, altere DB_PASS para a senha do seu banco e instale as dependências no terminal:  
 
 ```bash
 pip install requests psycopg2-binary flask flask-cors  
